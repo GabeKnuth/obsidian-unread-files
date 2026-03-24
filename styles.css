@@ -1,0 +1,36 @@
+/* Unread file: bold name */
+.nav-file-title.is-unread .nav-file-title-content {
+    font-weight: var(--font-semibold, 600);
+}
+
+/* Unread file: accent-colored dot after filename */
+.nav-file-title.is-unread::after {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    min-width: 6px;
+    border-radius: 50%;
+    background-color: var(--interactive-accent);
+    flex-shrink: 0;
+    margin-left: auto;
+    margin-right: 6px;
+    align-self: center;
+    opacity: 0.85;
+}
+
+/* Folder containing unread files: fainter dot */
+.nav-folder-title.has-unread::after {
+    content: '';
+    display: block;
+    width: 5px;
+    height: 5px;
+    min-width: 5px;
+    border-radius: 50%;
+    background-color: var(--interactive-accent);
+    flex-shrink: 0;
+    margin-left: auto;
+    margin-right: 6px;
+    align-self: center;
+    opacity: 0.35;
+}

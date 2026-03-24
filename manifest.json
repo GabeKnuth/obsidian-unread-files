@@ -1,0 +1,10 @@
+{
+  "id": "unread-files",
+  "name": "Unread Files",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Shows a visual indicator on files that have been created or modified since you last opened them.",
+  "author": "Gabe Knuth",
+  "authorUrl": "https://github.com/gabeknuth",
+  "isDesktopOnly": false
+}
