@@ -1,9 +1,9 @@
 {
   "id": "unread-files",
   "name": "Unread Files",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minAppVersion": "1.0.0",
-  "description": "Shows a visual indicator on files that have been created or modified since you last opened them.",
+  "description": "Shows a visual indicator on files that have been created or modified since you last opened them. Syncs read/unread state across devices via Obsidian Sync.",
   "author": "Gabe Knuth",
   "authorUrl": "https://github.com/gabeknuth",
   "isDesktopOnly": false

@@ -33,24 +33,30 @@ var DEFAULT_DATA = {
   readTimestamps: {},
   initialized: false
 };
+var SYNC_PATH = "notes/_resources/unread-files-sync.json";
+var SYNC_PREFIXES = ["notes/", "personal/"];
 var UnreadFilesPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
     this.data = { ...DEFAULT_DATA };
     this.refreshTimer = null;
     this.saveTimer = null;
+    this.syncSaveTimer = null;
+    this.lastSyncWrite = 0;
   }
   async onload() {
     const stored = await this.loadData();
     this.data = Object.assign({ ...DEFAULT_DATA }, stored);
+    await this.loadSyncFile();
     if (!this.data.initialized) {
       this.seedAllFiles();
       this.data.initialized = true;
       await this.saveData(this.data);
+      await this.saveSyncFile();
     }
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => {
-        if (file) {
+        if (file && file.path !== SYNC_PATH) {
           this.data.readTimestamps[file.path] = Date.now();
           this.debouncedSave();
           this.debouncedRefresh();
@@ -59,6 +65,15 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
+        if (file.path === SYNC_PATH) {
+          if (Date.now() - this.lastSyncWrite > 2e3) {
+            this.loadSyncFile().then(() => {
+              this.debouncedLocalSave();
+              this.debouncedRefresh();
+            });
+          }
+          return;
+        }
         const active = this.app.workspace.getActiveFile();
         if (active && active.path === file.path) {
           this.data.readTimestamps[file.path] = Date.now();
@@ -68,10 +83,15 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
       })
     );
     this.registerEvent(
-      this.app.vault.on("create", () => this.debouncedRefresh())
+      this.app.vault.on("create", (file) => {
+        if (file.path !== SYNC_PATH)
+          this.debouncedRefresh();
+      })
     );
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
+        if (file.path === SYNC_PATH)
+          return;
         delete this.data.readTimestamps[file.path];
         this.debouncedSave();
         this.debouncedRefresh();
@@ -79,6 +99,8 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
+        if (file.path === SYNC_PATH)
+          return;
         if (this.data.readTimestamps[oldPath] !== void 0) {
           this.data.readTimestamps[file.path] = this.data.readTimestamps[oldPath];
           delete this.data.readTimestamps[oldPath];
@@ -96,6 +118,8 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, abstractFile) => {
         if (abstractFile instanceof import_obsidian.TFile) {
+          if (abstractFile.path === SYNC_PATH)
+            return;
           if (this.isUnread(abstractFile)) {
             menu.addItem((item) => {
               item.setTitle("Mark as read").setIcon("check").onClick(() => {
@@ -131,14 +155,58 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
     });
     this.app.workspace.onLayoutReady(() => this.refreshExplorer());
   }
+  // ── Sync file ─────────────────────────────────────────────────
+  async loadSyncFile() {
+    try {
+      const exists = await this.app.vault.adapter.exists(SYNC_PATH);
+      if (!exists)
+        return;
+      const raw = await this.app.vault.adapter.read(SYNC_PATH);
+      const synced = JSON.parse(raw);
+      if (synced == null ? void 0 : synced.readTimestamps) {
+        for (const [path, ts] of Object.entries(
+          synced.readTimestamps
+        )) {
+          if (!this.data.readTimestamps[path] || ts > this.data.readTimestamps[path]) {
+            this.data.readTimestamps[path] = ts;
+          }
+        }
+      }
+    } catch (e) {
+      console.log("Unread Files: could not load sync file", e);
+    }
+  }
+  shouldSync(path) {
+    return SYNC_PREFIXES.some((p) => path.startsWith(p));
+  }
+  async saveSyncFile() {
+    try {
+      this.lastSyncWrite = Date.now();
+      const filtered = {};
+      for (const [path, ts] of Object.entries(
+        this.data.readTimestamps
+      )) {
+        if (this.shouldSync(path))
+          filtered[path] = ts;
+      }
+      const payload = JSON.stringify({ readTimestamps: filtered });
+      await this.app.vault.adapter.write(SYNC_PATH, payload);
+    } catch (e) {
+      console.log("Unread Files: could not save sync file", e);
+    }
+  }
   // ── Core logic ────────────────────────────────────────────────
   seedAllFiles() {
     for (const file of this.app.vault.getFiles()) {
-      this.data.readTimestamps[file.path] = file.stat.mtime;
+      if (file.path !== SYNC_PATH) {
+        this.data.readTimestamps[file.path] = file.stat.mtime;
+      }
     }
   }
   isUnread(file) {
     if (!(file instanceof import_obsidian.TFile))
+      return false;
+    if (file.path === SYNC_PATH)
       return false;
     const lastRead = this.data.readTimestamps[file.path];
     if (lastRead === void 0)
@@ -160,7 +228,7 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
     const now = Date.now();
     const walk = (f) => {
       for (const child of f.children) {
-        if (child instanceof import_obsidian.TFile) {
+        if (child instanceof import_obsidian.TFile && child.path !== SYNC_PATH) {
           this.data.readTimestamps[child.path] = now;
         } else if (child instanceof import_obsidian.TFolder) {
           walk(child);
@@ -175,22 +243,32 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
   markAllRead() {
     const now = Date.now();
     for (const file of this.app.vault.getFiles()) {
-      this.data.readTimestamps[file.path] = now;
+      if (file.path !== SYNC_PATH) {
+        this.data.readTimestamps[file.path] = now;
+      }
     }
     this.debouncedSave();
     this.debouncedRefresh();
     new import_obsidian.Notice("All files marked as read");
   }
   // ── Debounced operations ──────────────────────────────────────
+  /** Save local data.json only (after receiving remote sync merge) */
+  debouncedLocalSave() {
+    if (this.saveTimer)
+      clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.saveData(this.data), 2e3);
+  }
+  /** Save local data.json (2s debounce) + sync file (30s debounce) */
+  debouncedSave() {
+    this.debouncedLocalSave();
+    if (this.syncSaveTimer)
+      clearTimeout(this.syncSaveTimer);
+    this.syncSaveTimer = setTimeout(() => this.saveSyncFile(), 3e4);
+  }
   debouncedRefresh() {
     if (this.refreshTimer)
       clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => this.refreshExplorer(), 150);
-  }
-  debouncedSave() {
-    if (this.saveTimer)
-      clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.saveData(this.data), 2e3);
   }
   // ── Explorer DOM manipulation ─────────────────────────────────
   refreshExplorer() {
@@ -244,6 +322,10 @@ var UnreadFilesPlugin = class extends import_obsidian.Plugin {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveData(this.data);
+    }
+    if (this.syncSaveTimer) {
+      clearTimeout(this.syncSaveTimer);
+      this.saveSyncFile();
     }
     document.querySelectorAll(".is-unread").forEach((el) => el.classList.remove("is-unread"));
     document.querySelectorAll(".has-unread").forEach((el) => el.classList.remove("has-unread"));
