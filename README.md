@@ -46,44 +46,23 @@ Read/unread state syncs across devices via Obsidian Sync. The plugin writes a li
 
 ## Installation
 
-### From Obsidian Community Plugins
-
-1. Open **Settings → Community Plugins**
-2. Search for "Unread Files"
-3. Click **Install**, then **Enable**
-
-### Manual installation
-
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/gabeknuth/obsidian-unread-files/releases)
+1. Download `main.js`, `manifest.json`, and `styles.css` from this repo
 2. Create a folder called `unread-files` in your vault's `.obsidian/plugins/` directory
 3. Place the three files inside it
 4. Restart Obsidian and enable the plugin in **Settings → Community Plugins**
 
-### With BRAT
-
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) if you don't have it
-2. In BRAT settings, click **Add Beta Plugin**
-3. Enter: `gabeknuth/obsidian-unread-files`
+This is not (currently) an official Community Plugin — install is manual, straight from this repo.
 
 ## Configuration
 
-The sync file path and folder prefixes are defined as constants at the top of `main.ts`:
+The sync file path and folder prefixes are defined as constants at the top of `main.js`:
 
-```typescript
+```javascript
 const SYNC_PATH = 'notes/_resources/unread-files-sync.json';
 const SYNC_PREFIXES = ['notes/', 'personal/'];
 ```
 
 Adjust these to match your vault structure if needed.
-
-## Building from source
-
-```bash
-npm install
-npm run build
-```
-
-This outputs `main.js` in the project root. Copy `main.js`, `manifest.json`, and `styles.css` to your vault's `.obsidian/plugins/unread-files/` directory.
 
 ## How read/unread state is tracked
 
